@@ -1,9 +1,14 @@
 FROM debian:12
 
 RUN apt-get update && apt-get install -y
-RUN apt -y install build-essential git curl wget libnewt-dev libssl-dev libncurses5-dev subversion libsqlite3-dev libjansson-dev libxml2-dev uuid-dev default-libmysqlclient-dev htop sngrep lame ffmpeg mpg123
-RUN apt -y install git vim curl wget libnewt-dev libssl-dev libncurses5-dev subversion libsqlite3-dev build-essential libjansson-dev libxml2-dev uuid-dev expect
-RUN apt-get install -y cron build-essential openssh-server apache2 mariadb-server mariadb-client bison flex php8.2 php8.2-curl php8.2-cli php8.2-common php8.2-mysql php8.2-gd php8.2-mbstring php8.2-intl php8.2-xml php-pear curl sox libncurses5-dev libssl-dev mpg123 libxml2-dev libnewt-dev sqlite3 libsqlite3-dev pkg-config automake libtool autoconf git unixodbc-dev uuid uuid-dev libasound2-dev libogg-dev libvorbis-dev libicu-dev libcurl4-openssl-dev odbc-mariadb libical-dev libneon27-dev libsrtp2-dev libspandsp-dev sudo subversion libtool-bin python-dev-is-python3 unixodbc vim wget libjansson-dev software-properties-common nodejs npm ipset iptables fail2ban php-soap
+RUN apt -y install default-libmysqlclient-dev htop sngrep lame ffmpeg expect
+RUN apt-get install -y cron fail2ban openssh-server apache2 mariadb-server mariadb-client bison flex \
+    php8.2 php8.2-curl php8.2-cli php8.2-common php8.2-mysql php8.2-gd php8.2-mbstring php8.2-intl \
+    php8.2-xml php-pear curl sox libncurses5-dev libssl-dev mpg123 libxml2-dev libnewt-dev sqlite3 \
+    libsqlite3-dev pkg-config automake libtool autoconf git unixodbc-dev uuid uuid-dev libasound2-dev \ 
+    libogg-dev libvorbis-dev libicu-dev libcurl4-openssl-dev odbc-mariadb libical-dev libneon27-dev \
+    libsrtp2-dev libspandsp-dev sudo subversion libtool-bin python-dev-is-python3 unixodbc vim wget \
+    libjansson-dev software-properties-common nodejs npm ipset iptables fail2ban php-soap
 
 WORKDIR /usr/src
 RUN wget http://downloads.asterisk.org/pub/telephony/asterisk/asterisk-22.1.0.tar.gz 
@@ -76,10 +81,27 @@ WORKDIR /usr/local/src/freepbx/
 
 RUN systemctl enable mariadb.service
 
-
-
 COPY ./init_install.sh .
 RUN chmod +x ./init_install.sh 
 RUN ./init_install.sh
 
-CMD service apache2 start && service mariadb start && fwconsole start -q & tail -f /dev/null
+RUN cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
+RUN cat <<EOF > /etc/fail2ban/jail.local
+[sshd]
+enabled  = false
+
+[asterisk]
+enabled  = true
+backend=systemd
+port     = 5060,5061
+filter   = asterisk
+logpath  = /var/log/asterisk/full
+maxretry = 3
+findtime = 600
+bantime  = 3600
+EOF
+
+RUN chmod 644 /var/log/asterisk/full
+
+CMD service apache2 start && service mariadb start && service fail2ban start && fwconsole start -q & tail -f /dev/null
