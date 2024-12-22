@@ -12,7 +12,8 @@ RUN apt-get install -y cron fail2ban openssh-server apache2 mariadb-server maria
 
 WORKDIR /usr/src
 RUN wget http://downloads.asterisk.org/pub/telephony/asterisk/asterisk-22.1.0.tar.gz 
-RUN tar xvf asterisk-22.1.0.tar.gz 
+RUN tar xvf asterisk-22.1.0.tar.gz
+RUN rm -rf asterisk-22.1.0.tar.gz
 
 WORKDIR /usr/src/asterisk-22.1.0
 RUN pwd
@@ -43,11 +44,16 @@ RUN sed -i 's|;rungroup|rungroup|' /etc/asterisk/asterisk.conf
 RUN echo "/usr/lib64" >> /etc/ld.so.conf.d/x86_64-linux-gnu.conf
 RUN ldconfig
 
+# Configure apache
+RUN sed -i 's/\(^upload_max_filesize = \).*/\120M/' /etc/php/8.2/apache2/php.ini \
+    && sed -i 's/\(^memory_limit = \).*/\1256M/' /etc/php/8.2/apache2/php.ini \
+    && sed -i 's/^\(User\|Group\).*/\1 asterisk/' /etc/apache2/apache2.conf \
+    && sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
+    && sed -i 's/VirtualHost \*:80/VirtualHost \*:8082/' /etc/apache2/sites-available/000-default.conf \
+    && sed -i 's/Listen 80/Listen 8082/' /etc/apache2/ports.conf
 
-RUN sed -i 's/\(^upload_max_filesize = \).*/\120M/' /etc/php/8.2/apache2/php.ini
-RUN sed -i 's/\(^memory_limit = \).*/\1256M/' /etc/php/8.2/apache2/php.ini
-RUN sed -i 's/^\(User\|Group\).*/\1 asterisk/' /etc/apache2/apache2.conf
-RUN sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+
+
 RUN a2enmod rewrite
 RUN service apache2 restart
 RUN rm /var/www/html/index.html
@@ -74,6 +80,8 @@ EOF
 WORKDIR /usr/local/src
 RUN wget http://mirror.freepbx.org/modules/packages/freepbx/freepbx-17.0-latest-EDGE.tgz
 RUN tar zxvf freepbx-17.0-latest-EDGE.tgz
+RUN rm -rf freepbx-17.0-latest-EDGE.tgz
+
 
 
 WORKDIR /usr/local/src/freepbx/
@@ -103,5 +111,43 @@ bantime  = 3600
 EOF
 
 RUN chmod 644 /var/log/asterisk/full
+
+##################
+# Cleanup
+##################
+RUN apt-get remove -y --purge autoconf \
+    automake \
+    bison \
+    flex \
+    git \
+    libcurl4-openssl-dev \
+    openssh-server \
+    subversion \
+    libmysqlclient-dev \
+    libncurses5-dev \
+    libssl-dev \
+    libxml2-dev \
+    libnewt-dev \
+    libsqlite3-dev \
+    unixodbc-dev \
+    uuid-dev \
+    libasound2-dev \
+    libogg-dev \
+    libvorbis-dev \
+    libicu-dev \
+    libical-dev \
+    libneon27-dev \
+    libsrtp2-dev \
+    libspandsp-dev \
+    python-dev \
+    libjansson-dev
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/\* /tmp/\* /var/tmp/*
+
+EXPOSE 80
+EXPOSE 5060/udp
+EXPOSE 10000-20000/udp
+VOLUME ["/etc/asterisk","/etc/apache2","/var/www/html","/var/lib/mysql","/var/spool/asterisk","/var/lib/asterisk"]
+
 
 CMD service apache2 start && service mariadb start && service fail2ban start && fwconsole start -q & tail -f /dev/null

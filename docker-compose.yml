@@ -2,7 +2,7 @@ services:
   freepbx:
     # network_mode: "host"
     ports:
-    - "8082:80"
+    - "8082:8082"
     - "5060-5060:5060-5060/udp"
     - "10000-10050-:10000-10050/udp"
     build:
